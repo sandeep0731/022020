@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<typedefs xmlns="http://www.vzw.com/namespaces/scm" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.vzw.com/namespaces/scm DataServicesSchema.xsd">
+    <typedef type="COR_GetPeerListByUserId">
+
+	<key attribs="visionUserIdCd,supervisorUserIdCd,days91AgoLimit,currentDate"/>
+		
+	 <attribute name="cqHierarchyUserId" >
+		<constructModels fromVariable="$visionUserIdCd" modelType="com.vzwcorp.dagv.data.model.CeqHierarchyModel" modelField="visionUserIdCd"/>
+    </attribute>
+	
+				<!-- FCST589C S.NO 10 and 31  -->
+		
+			<attribute name="tempCeqHierarchy" type="CeqHierarchyModel" dataservice="Cassandra" visible="true">
+				<query>select pk1_value as vision_user_id_cd,ck1_value as eff_dt,nk1_value as direct_user_id_cd,nk2_value as user_hier_lvl_cd,nk3_value as end_dt from reference_xref where source_table='CEQ_HIERARCHY' and pk1_value = %cqHierarchyUserId.visionUserIdCd</query>
+			</attribute>
+			
+			<attribute name="tempHrHierLvlCode" type="HrHierLvlCodeModel" dataservice="Cassandra" visible="true">
+				<query>select pk1_value as hr_hier_lvl_cd,nk1_value as hr_hier_lvl_dsc,nk2_value as hr_hier_cat_cd,nk3_value as mgr_capability_cd from reference_xref where source_table='HR_HIER_LVL_CODE' and pk1_value = %tempCeqHierarchy.userHierLvlCd.hrHierLvlCd</query>
+			</attribute>
+			
+				<attribute name="tempMaxEffDateWithCatCd" type="CeqHierarchyModel" dataservice="Cassandra" visible="true">
+				<variable>%tempCeqHierarchy.findAll{null != it.userHierLvlCd &amp;&amp; '' != it.userHierLvlCd &amp;&amp; %tempHrHierLvlCode.hrHierLvlCd.contains(it.userHierLvlCd) &amp;&amp; ((it.endDt &gt; $days91AgoLimit &amp;&amp; 
+				   it.endDt &lt; $currentDate) || it.endDt == '9999-12-31')}</variable>
+			</attribute>
+			
+			<attribute name="maxEffDateWithCatCd" visible="true">
+				<variable>%tempMaxEffDateWithCatCd.max{it.effDt}</variable>
+			</attribute>
+			
+			<attribute name="cqHierarchy1" type="CeqHierarchyModel" dataservice="Cassandra">
+				<variable>%tempCeqHierarchy.findAll{null != it.effDt &amp;&amp; '' != it.effDt &amp;&amp; null != it.endDt &amp;&amp; '' != it.endDt &amp;&amp; ((it.endDt &gt; $days91AgoLimit &amp;&amp; it.endDt &lt; $currentDate) || it.endDt == '9999-12-31') &amp;&amp; %maxEffDateWithCatCd.effDt.contains(it.effDt)}</variable>
+			</attribute>
+			
+			<!-- FCST589C S.NO 29  -->
+			<attribute name="cqHierarchy2" type="CeqHierarchyModel" dataservice="Cassandra">
+				<variable>%tempCeqHierarchy.findAll{null != it.visionUserIdCd &amp;&amp; '' != it.visionUserIdCd &amp;&amp; it.visionUserIdCd == $visionUserIdCd &amp;&amp; null != it.userHierLvlCd &amp;&amp; '' != it.userHierLvlCd &amp;&amp; %tempHrHierLvlCode.hrHierLvlCd.contains(it.userHierLvlCd) &amp;&amp; %tempHrHierLvlCode.hrHierCatCd.contains('DRECT') &amp;&amp;  null != it.endDt &amp;&amp; '' != it.endDt &amp;&amp; ((it.endDt &gt; $days91AgoLimit &amp;&amp; it.endDt &lt; $currentDate) || it.endDt == '9999-12-31')}</variable>
+			</attribute>
+		
+			<attribute name="newEffDateWithOutCatCd" type="CeqHierarchyModel" dataservice="Cassandra">
+				<variable>%tempCeqHierarchy.findAll{((it.endDt &gt; $days91AgoLimit &amp;&amp; it.endDt &lt; $currentDate) || 
+				it.endDt == '9999-12-31')}</variable>
+			</attribute>
+			
+		    <attribute name="maxEffDateWithOutCatCd" visible="true">
+				<variable>%newEffDateWithOutCatCd.max{it.effDt}</variable>
+			</attribute>
+			
+					
+			<attribute name="cqHierarchy3" type="CeqHierarchyModel" dataservice="Cassandra">
+				<variable>%tempCeqHierarchy.findAll{null != it.effDt &amp;&amp; '' != it.effDt &amp;&amp; null != it.endDt &amp;&amp; 
+				'' != it.endDt &amp;&amp; ((it.endDt &gt; $days91AgoLimit &amp;&amp; it.endDt &lt; $currentDate) || it.endDt == '9999-12-31') 
+				&amp;&amp; it.effDt == %maxEffDateWithOutCatCd.effDt}</variable>
+			</attribute>
+			
+			<attribute  name="reviewrUserIdCd">
+					<variable>
+						$supervisorUserIdCd
+					</variable>
+			</attribute>
+			
+			<!-- FCST589C S.NO 15  -->
+			<attribute name="pendCredReqAll" type="PendCredRequestModel" dataservice="Cassandra" defaultToEmptyIfCancel="true">
+            	<query>select reviewr_user_id_cd, pend_cred_stat_cd  from pend_cred_request_by_reviewr where reviewr_user_id_cd=%reviewrUserIdCd</query>
+            	<queryFilters operator="OR">
+					<queryFilter column="pend_cred_stat_cd" expression="EQUALS" value="P"/>
+				</queryFilters>
+			</attribute> 
+		   
+		   	<!-- FCST589C S.NO 41  -->
+			<attribute name="pendCredStatCd" type="CdTableModel" dataservice="Cassandra">
+				<query>SELECT cd, dsc FROM cd_table WHERE cd_nme = 'PEND_CRED_STAT_CD'</query>
+			</attribute>
+			
+				<!-- FCST589C S.NO 33  -->
+			<attribute name="tempCeqHierarchyByDirect" type="CeqHierarchyByDirectModel" dataservice="Cassandra" visible="true">
+				<query>select pk1_value as direct_user_id_cd,ck1_value as vision_user_id_cd,ck2_value as eff_dt,nk2_value as user_hier_lvl_cd,nk3_value as end_dt from reference_xref where source_table='CEQ_HIERARCHY_BY_DIRECT' and pk1_value =%maxEffDateWithOutCatCd.directUserIdCd</query>
+			</attribute>
+			
+			<attribute name="peerListAssDir" type="CeqHierarchyByDirectModel" dataservice="Cassandra">
+				<variable>%tempCeqHierarchyByDirect.findAll{it.visionUserIdCd != $visionUserIdCd}</variable>
+			</attribute>
+			
+		    <attribute name="tempHrHierLvlCodeByDirect" type="HrHierLvlCodeModel" dataservice="Cassandra" visible="true">
+				<query>select pk1_value as hr_hier_lvl_cd,nk1_value as hr_hier_lvl_dsc,nk2_value as hr_hier_cat_cd,nk3_value as mgr_capability_cd from reference_xref where source_table='HR_HIER_LVL_CODE' and pk1_value = %peerListAssDir.userHierLvlCd.hrHierLvlCd</query>
+				<queryFilters operator="AND">
+					<queryFilter column="nk2_value" expression="EQUALS" value="DRECT"/>
+				</queryFilters>
+			</attribute>
+			
+    </typedef>
+</typedefs>
+
